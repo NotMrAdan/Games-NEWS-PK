@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Code → Image Viewer (Dark)</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#0f1620; --muted:#9aa6b2; --accent:#7c4dff;
+      --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0; font-family:Inter,Segoe UI,Helvetica,Arial; background:linear-gradient(180deg,#06080a 0%, #0b0f14 100%); color:#e6eef6}
+    .container{max-width:980px;margin:48px auto;padding:24px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+    h1{font-size:20px;margin:0;letter-spacing:0.2px}
+    .sub{color:var(--muted);font-size:13px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:12px; padding:20px; box-shadow: 0 6px 20px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.03)}
+    .input-row{display:flex;gap:12px; margin-top:14px}
+    input[type="text"]{flex:1;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:15px;outline:none}
+    button{background:var(--accent);border:none;color:white;padding:11px 16px;border-radius:10px;cursor:pointer;font-weight:600;box-shadow:0 6px 20px rgba(124,77,255,0.15);transition:transform .15s ease}
+    button:active{transform:translateY(1px)}
+    .muted{color:var(--muted);font-size:13px;margin-top:8px}
+    .admin-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px 12px;border-radius:10px;cursor:pointer}
+    /* modal */
+    .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(0deg, rgba(2,6,23,0.6), rgba(2,6,23,0.6));backdrop-filter: blur(6px);z-index:50;opacity:0;pointer-events:none;transition:opacity .18s ease}
+    .overlay.show{opacity:1;pointer-events:auto}
+    .modal{width:680px;max-width:94%;background:var(--card);border-radius:14px;padding:18px;box-shadow:0 10px 40px rgba(2,6,23,0.7); border:1px solid rgba(255,255,255,0.03)}
+    .row{display:flex;gap:12px;align-items:center}
+    .center{text-align:center}
+    .countdown{font-size:48px;font-weight:700;color:var(--accent);animation:pop .35s ease}
+    @keyframes pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+    /* image modal */
+    .img-wrap{display:flex;flex-direction:column;gap:12px;align-items:center}
+    .img-wrap img{max-width:100%;border-radius:10px;box-shadow:0 10px 40px rgba(2,6,23,0.7);transform-origin:center;opacity:0;transform:translateY(8px) scale(.98);transition:all .45s cubic-bezier(.2,.9,.18,1)}
+    .img-wrap img.show{opacity:1;transform:translateY(0) scale(1)}
+    /* admin panel */
+    .admin-panel{display:flex;gap:18px;margin-top:14px}
+    .admin-left{flex:1;min-width:260px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input.add, textarea.add{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
+    .small{font-size:13px;color:var(--muted)}
+    ul.list{margin:0;padding:0;list-style:none;max-height:320px;overflow:auto;border-radius:8px;padding:8px;border:1px solid rgba(255,255,255,0.02)}
+    li.item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;margin-bottom:6px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005))}
+    .danger{background:transparent;border:1px solid rgba(255,80,80,0.12);color:#ff8b8b;padding:8px 10px;border-radius:8px;cursor:pointer}
+    footer{margin-top:20px;color:var(--muted);font-size:13px;text-align:center}
+    /* responsive */
+    @media (max-width:720px){
+      .admin-panel{flex-direction:column}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Code → Image Viewer</h1>
+        <div class="sub">Enter a 9-digit numeric code to view the associated image.</div>
+      </div>
+      <div>
+        <button id="adminOpen" class="admin-btn">Admin</button>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="muted">Enter your 9-digit code below (numbers only)</div>
+      <div class="input-row" style="margin-top:12px">
+        <input id="codeInput" placeholder="e.g. 123456789" maxlength="9" inputmode="numeric" />
+        <button id="getBtn">Get</button>
+      </div>
+      <div class="muted" style="margin-top:10px">If code is valid, a 3s countdown will run then the image will appear.</div>
+    </div>
+
+    <footer>Built with Firebase • Dark animated UI</footer>
+  </div>
+
+  <!-- overlay for countdown + image -->
+  <div id="overlay" class="overlay">
+    <div class="modal center" style="max-width:520px">
+      <div id="countdownWrap" class="card center" style="padding:22px;">
+        <div class="muted">Image will appear in</div>
+        <div id="count" class="countdown">3</div>
+        <div id="status" class="muted" style="margin-top:6px"></div>
+      </div>
+
+      <div id="imageWrap" class="img-wrap" style="margin-top:12px; display:none;">
+        <div class="muted" id="imageCodeLabel"></div>
+        <img id="resultImg" src="" alt="code image" />
+        <div style="margin-top:8px">
+          <button id="closeImg">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- admin modal -->
+  <div id="adminOverlay" class="overlay">
+    <div class="modal" style="max-width:760px">
+      <div id="adminContent">
+        <!-- login -->
+        <div id="adminLogin" class="card">
+          <h3>Admin Login</h3>
+          <div class="muted small" id="credsNotice" style="display:none"></div>
+          <div style="margin-top:12px">
+            <label>Username</label>
+            <input id="adminUser" class="add" placeholder="Enter username" />
+          </div>
+          <div style="margin-top:8px">
+            <label>Password</label>
+            <input id="adminPass" type="password" class="add" placeholder="Enter password" />
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button id="adminLoginBtn">Login</button>
+            <button id="adminClose" class="admin-btn">Close</button>
+          </div>
+          <div id="loginMsg" class="muted small" style="margin-top:8px"></div>
+        </div>
+
+        <!-- admin panel -->
+        <div id="adminPanel" style="display:none" class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0">Admin Panel</h3>
+            <div style="display:flex;gap:8px">
+              <button id="adminLogout" class="admin-btn">Logout</button>
+            </div>
+          </div>
+
+          <div class="admin-panel" style="margin-top:12px">
+            <div class="admin-left">
+              <label>9-digit Code</label>
+              <input id="newCode" class="add" placeholder="123456789" maxlength="9" />
+              <label style="margin-top:8px">Image URL (direct link)</label>
+              <input id="newImg" class="add" placeholder="https://example.com/image.jpg" />
+              <div style="margin-top:10px;display:flex;gap:8px">
+                <button id="addBtn">Add / Update</button>
+                <button id="clearForm" class="admin-btn">Clear</button>
+              </div>
+              <div id="addMsg" class="muted small" style="margin-top:8px"></div>
+            </div>
+
+            <div style="flex:1">
+              <label>Existing codes</label>
+              <ul id="codesList" class="list"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK + App logic -->
+  <script type="module">
+    // CDN imports (Firebase 9 modular)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics.js";
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+    import { getDatabase, ref, set as rset, get as rget } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+    // ====== use your provided firebase config ======
+    const firebaseConfig = {
+      apiKey: "AIzaSyCRJVer11I3mlqogM5SZyQNMRrHtgGitUA",
+      authDomain: "notgamesare.firebaseapp.com",
+      databaseURL: "https://notgamesare-default-rtdb.firebaseio.com",
+      projectId: "notgamesare",
+      storageBucket: "notgamesare.firebasestorage.app",
+      messagingSenderId: "484604622337",
+      appId: "1:484604622337:web:fd12e1103618bec3c23200",
+      measurementId: "G-HTMG7M6MJF"
+    };
+    const app = initializeApp(firebaseConfig);
+    try { getAnalytics(app); } catch(e){ /* analytics may fail in some browsers */ }
+
+    const db = getFirestore(app);
+    const rdb = getDatabase(app);
+
+    // ---------- UI elements ----------
+    const codeInput = document.getElementById('codeInput');
+    const getBtn = document.getElementById('getBtn');
+    const overlay = document.getElementById('overlay');
+    const countEl = document.getElementById('count');
+    const countdownWrap = document.getElementById('countdownWrap');
+    const imageWrap = document.getElementById('imageWrap');
+    const resultImg = document.getElementById('resultImg');
+    const imageCodeLabel = document.getElementById('imageCodeLabel');
+    const closeImg = document.getElementById('closeImg');
+    const status = document.getElementById('status');
+
+    const adminOpen = document.getElementById('adminOpen');
+    const adminOverlay = document.getElementById('adminOverlay');
+    const adminClose = document.getElementById('adminClose');
+
+    const adminLogin = document.getElementById('adminLogin');
+    const adminPanel = document.getElementById('adminPanel');
+    const adminUser = document.getElementById('adminUser');
+    const adminPass = document.getElementById('adminPass');
+    const adminLoginBtn = document.getElementById('adminLoginBtn');
+    const loginMsg = document.getElementById('loginMsg');
+    const adminLogout = document.getElementById('adminLogout');
+
+    const newCode = document.getElementById('newCode');
+    const newImg = document.getElementById('newImg');
+    const addBtn = document.getElementById('addBtn');
+    const addMsg = document.getElementById('addMsg');
+    const codesList = document.getElementById('codesList');
+
+    // helper: validate 9-digit numeric code
+    function validCode(c){
+      return /^\d{9}$/.test(c);
+    }
+
+    // show overlay with countdown and then image (if found)
+    async function handleGet(){
+      const code = codeInput.value.trim();
+      if(!validCode(code)){
+        alert('Please enter a valid 9-digit numeric code.');
+        return;
+      }
+      // reset
+      countdownWrap.style.display = '';
+      imageWrap.style.display = 'none';
+      resultImg.classList.remove('show');
+      overlay.classList.add('show');
+      status.textContent = '';
+      // countdown 3..2..1 (fast animation: 700ms each)
+      for(let i=3;i>=1;i--){
+        countEl.textContent = i;
+        await new Promise(r => setTimeout(r, 700));
+      }
+      // after countdown, fetch image
+      status.textContent = 'Checking database...';
+      const imageUrl = await fetchImageForCode(code);
+      if(!imageUrl){
+        status.textContent = 'No image found for code: ' + code;
+        return;
+      }
+      // show image
+      status.textContent = 'Image found — rendering...';
+      imageCodeLabel.textContent = 'Code: ' + code;
+      resultImg.src = imageUrl + (imageUrl.includes('?') ? '&' : '?') + 'cachebust=' + Date.now();
+      resultImg.onload = () => {
+        countdownWrap.style.display = 'none';
+        imageWrap.style.display = '';
+        setTimeout(()=> resultImg.classList.add('show'), 50);
+      }
+      resultImg.onerror = () => {
+        status.textContent = 'Image failed to load. Check the link in admin.';
+      }
+    }
+
+    // fetch image URL: first Firestore, then Realtime DB fallback
+    async function fetchImageForCode(code){
+      try {
+        const docRef = doc(db, 'codes', code);
+        const snap = await getDoc(docRef);
+        if(snap.exists()){
+          const data = snap.data();
+          if(data && data.imageUrl) return data.imageUrl;
+        }
+      } catch(e){
+        console.warn('Firestore read error', e);
+      }
+      // fallback: realtime DB
+      try {
+        const rref = ref(rdb, 'codes/' + code + '/imageUrl');
+        const snapshot = await rget(rref);
+        if(snapshot.exists()){
+          return snapshot.val();
+        }
+      } catch(e){
+        console.warn('RTDB read error', e);
+      }
+      return null;
+    }
+
+    // close image modal
+    closeImg.addEventListener('click', ()=> {
+      overlay.classList.remove('show');
+      resultImg.src = '';
+      resultImg.classList.remove('show');
+      status.textContent = '';
+    });
+
+    // Get button
+    getBtn.addEventListener('click', handleGet);
+    codeInput.addEventListener('keydown', (e)=> { if(e.key === 'Enter') handleGet(); });
+
+    // ---------- Admin modal open/close ----------
+    adminOpen.addEventListener('click', ()=> adminOverlay.classList.add('show'));
+    adminClose.addEventListener('click', ()=> adminOverlay.classList.remove('show'));
+    adminOverlay.addEventListener('click', (e)=> { if(e.target === adminOverlay) adminOverlay.classList.remove('show'); });
+
+    // Admin login (client-side simple check)
+    adminLoginBtn.addEventListener('click', ()=> {
+      const u = adminUser.value.trim();
+      const p = adminPass.value;
+      // credentials still: adan000 / adan999 (NOT shown anywhere)
+      if(u === 'adan000' && p === 'adan999'){
+        loginMsg.textContent = 'Login successful';
+        adminLogin.style.display = 'none';
+        adminPanel.style.display = '';
+        loadAllCodes();
+      } else {
+        loginMsg.textContent = 'Invalid credentials';
+      }
+    });
+
+    adminLogout.addEventListener('click', ()=> {
+      adminPanel.style.display = 'none';
+      adminLogin.style.display = '';
+      adminUser.value = ''; adminPass.value = '';
+      loginMsg.textContent = 'Logged out';
+    });
+
+    // add / update code
+    addBtn.addEventListener('click', async ()=>{
+      const c = newCode.value.trim();
+      const img = newImg.value.trim();
+      addMsg.textContent = '';
+      if(!validCode(c)){ addMsg.textContent = 'Code must be exactly 9 digits.'; return; }
+      if(!img){ addMsg.textContent = 'Provide an image URL.'; return; }
+
+      try {
+        // Firestore
+        const docRef = doc(db, 'codes', c);
+        await setDoc(docRef, { imageUrl: img, updatedAt: new Date().toISOString() }, { merge: true });
+
+        // Realtime DB mirror
+        await rset(ref(rdb, 'codes/' + c), { imageUrl: img, updatedAt: Date.now() });
+
+        addMsg.textContent = 'Saved to Firestore & Realtime DB.';
+        newCode.value = ''; newImg.value = '';
+        loadAllCodes();
+      } catch(e){
+        console.error(e);
+        addMsg.textContent = 'Save failed: ' + (e.message || e);
+      }
+    });
+
+    // load all codes from Firestore and display
+    async function loadAllCodes(){
+      codesList.innerHTML = '<li class="muted small" style="padding:8px">Loading…</li>';
+      try {
+        const coll = collection(db, 'codes');
+        const snap = await getDocs(coll);
+        codesList.innerHTML = '';
+        if(snap.empty){
+          codesList.innerHTML = '<li class="muted small" style="padding:8px">No codes yet.</li>';
+          return;
+        }
+        snap.forEach(docSnap => {
+          const id = docSnap.id;
+          const data = docSnap.data();
+          const li = document.createElement('li');
+          li.className = 'item';
+          const left = document.createElement('div');
+          left.innerHTML = `<div><strong>${id}</strong><div class="small muted">${data.imageUrl || ''}</div></div>`;
+          const right = document.createElement('div');
+          const viewBtn = document.createElement('button');
+          viewBtn.textContent = 'View';
+          viewBtn.style.marginRight = '8px';
+          viewBtn.addEventListener('click', async ()=> {
+            const url = data.imageUrl;
+            overlay.classList.add('show');
+            countdownWrap.style.display = 'none';
+            imageWrap.style.display = '';
+            resultImg.src = url;
+            imageCodeLabel.textContent = 'Code: ' + id;
+            setTimeout(()=> resultImg.classList.add('show'), 50);
+          });
+          const delBtn = document.createElement('button');
+          delBtn.textContent = 'Delete';
+          delBtn.className = 'danger';
+          delBtn.addEventListener('click', async ()=>{
+            if(!confirm('Delete code '+id+' ?')) return;
+            try {
+              await deleteDoc(doc(db, 'codes', id));
+            } catch(e){ console.warn('delete firestore', e) }
+            try {
+              await rset(ref(rdb, 'codes/' + id), null);
+            } catch(e){ console.warn('delete rtdb', e) }
+            loadAllCodes();
+          });
+          right.appendChild(viewBtn);
+          right.appendChild(delBtn);
+          li.appendChild(left);
+          li.appendChild(right);
+          codesList.appendChild(li);
+        });
+      } catch(e){
+        console.error('loadAllCodes', e);
+        codesList.innerHTML = '<li class="muted small" style="padding:8px">Failed to load codes.</li>';
+      }
+    }
+
+    // misc: close overlay on background click
+    overlay.addEventListener('click', (e)=> { if(e.target === overlay) overlay.classList.remove('show'); });
+  </script>
+</body>
+</html>
